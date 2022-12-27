@@ -56,7 +56,12 @@ def main() -> int:
                 beatmap_set = score.beatmapset
 
                 if beatmap_set.id in common.beatmaps.downloaded:
-                    print("already downloaded", beatmap_set.title)
+                    print("you already have", beatmap_set.title)
+                    continue
+
+                new_map = common.beatmaps.NEW_MAPS_FOLDER / f"{beatmap_set.id}.osz"
+                if new_map.exists():
+                    print("its already in the `beatmaps` folder:", beatmap_set.title)
                     continue
 
                 print(f"downloading {beatmap_set.id} from {player.user_name}")
