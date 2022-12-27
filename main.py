@@ -78,7 +78,7 @@ def main() -> int:
         print(f"finished iterating for the {iterations} time!")
 
         for idx in range(LEN_PLAYERS * 2):
-            print(f"rate limit waiting {idx}/{LEN_PLAYERS}")
+            print(f"rate limit waiting {idx}/{LEN_PLAYERS * 2}")
             time.sleep(1)
 
         common.players = osu.players.update_players_recent(
