@@ -2,6 +2,9 @@
 
 <sup><sub>this is still a work in progress, i kind of rushed through it cause i wanted maps lol (12/26/22)</sub></sup>
 
+## Description
+This python project is a project that downloads beatmaps from osu! by watching the recent scores of a list of specified players. If you don't have the maps they are playing, they are downloaded and stored in a local folder called `beatmaps`.
+
 ## Configuration 
 
 To use this project, you will need to obtain an API key from the osu! API website (https://osu.ppy.sh/wiki/en/osu%21api). You will also need to obtain client credentials from the osu! API website in order to use the V2 API.
