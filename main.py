@@ -1,16 +1,16 @@
 """osu! beatmap fetcher: downloads beatmaps from watching your favorite players"""
 import asyncio
-import requests
 from pathlib import Path
 from typing import Optional
 
 import aiohttp
+import requests
+from ossapi import Score
+from ossapi.enums import ScoreType
 
 import common
 import config
 from objects.player import Player
-from ossapi import Score
-from ossapi.enums import ScoreType
 
 
 def init_downloaded_beatmaps() -> None:
@@ -101,12 +101,16 @@ async def get_players_with_updated_recent_scores(
 
 
 async def download_set_from_set_id(set_id: int, beatmap_title: str) -> Optional[Path]:
-    response = await common.http.SESSION.get( 
-        f"https://api.chimu.moe/v1/download/{set_id}",
-        headers={
-            "Accept": "application/octet-stream",
-        },
-    )
+    try:
+        response = await common.http.SESSION.get(
+            f"https://api.chimu.moe/v1/download/{set_id}",
+            headers={
+                "Accept": "application/octet-stream",
+            },
+        )
+    except aiohttp.ClientConnectionError as e:
+        print("error when downloading map:", e)
+        return None
 
     if response.status not in range(200, 300):
         print(f"Couldn't download {set_id}.osz / {beatmap_title}")
