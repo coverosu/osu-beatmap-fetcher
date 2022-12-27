@@ -44,34 +44,35 @@ def main() -> int:
 
     while True:
         for player in common.players:
-            if player.most_recent_score is None:
+            if player.most_recent_scores is None:
                 print(f"{player.user_name} has no recent scores")
                 continue
 
-            if not player.most_recent_score.beatmapset:
-                print(f"no beatmap set was found for", player.user_name)
-                continue
+            for score in player.most_recent_scores:
+                if not score.beatmapset:
+                    print(f"no beatmap set was found for", player.user_name)
+                    continue
 
-            beatmap_set = player.most_recent_score.beatmapset
+                beatmap_set = score.beatmapset
 
-            if beatmap_set.id in common.beatmaps.downloaded:
-                print("already downloaded", beatmap_set.title)
-                continue
+                if beatmap_set.id in common.beatmaps.downloaded:
+                    print("already downloaded", beatmap_set.title)
+                    continue
 
-            print(f"downloading {beatmap_set.id} from {player.user_name}")
-            beatmap = osu.download.beatmap_from_set_id(beatmap_set.id)
+                print(f"downloading {beatmap_set.id} from {player.user_name}")
+                beatmap = osu.download.beatmap_from_set_id(beatmap_set.id)
 
-            if beatmap is None:
-                print(f"Can't download beatmap from", player.user_name)
-                continue
+                if beatmap is None:
+                    print(f"Can't download beatmap from", player.user_name)
+                    continue
 
-            common.beatmaps.downloaded.append(beatmap_set.id)
+                common.beatmaps.downloaded.append(beatmap_set.id)
 
-            print(
-                f"Successfully downloaded beatmap ({beatmap.name} / {beatmap_set.title}) from {player.user_name}"
-            )
+                print(
+                    f"Successfully downloaded beatmap ({beatmap.name} / {beatmap_set.title}) from {player.user_name}"
+                )
 
-            time.sleep(2)
+                time.sleep(2)
 
         iterations += 1
 

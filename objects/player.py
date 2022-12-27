@@ -8,4 +8,4 @@ from ossapi.models import Score
 class Player:
     user_name: str
     id: int
-    most_recent_score: Optional[Score]
+    most_recent_scores: Optional[list[Score]]

@@ -32,7 +32,7 @@ def _create_player_from_user_name(
     player = Player(
         user_name=user.username,
         id=user.user_id,
-        most_recent_score=None,
+        most_recent_scores=None,
     )
 
     return {
@@ -120,10 +120,10 @@ def _update_players_recent(
         )
 
         if not recent_scores:
-            player.most_recent_score = None
+            player.most_recent_scores = None
             continue
 
-        player.most_recent_score = recent_scores[0]
+        player.most_recent_scores = recent_scores
 
     return {"success": True, "updated_players": players}
 
