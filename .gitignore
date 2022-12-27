@@ -4,3 +4,4 @@ beatmaps/
 *.txt
 !requirements.txt
 config.py
+*.json

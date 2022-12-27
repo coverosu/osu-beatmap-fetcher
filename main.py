@@ -1,9 +1,16 @@
 """osu! beatmap fetcher: downloads beatmaps from watching your favorite players"""
-import time
+import asyncio
+import requests
+from pathlib import Path
+from typing import Optional
+
+import aiohttp
 
 import common
 import config
-import osu
+from objects.player import Player
+from ossapi import Score
+from ossapi.enums import ScoreType
 
 
 def init_downloaded_beatmaps() -> None:
@@ -21,78 +28,176 @@ def init_downloaded_beatmaps() -> None:
 
 def init_common() -> None:
     init_downloaded_beatmaps()
+    common.http.SESSION = aiohttp.ClientSession()
 
-    if not common.beatmaps.NEW_MAPS_FOLDER.exists():
-        common.beatmaps.NEW_MAPS_FOLDER.mkdir(exist_ok=True)
 
-    common.players = osu.players.create_players_from_user_names(
-        user_names=config.osu_users_to_spectate,
+async def get_player_user_id(user_name: str) -> Optional[int]:
+    user = common.osu_api.v1.get_user(
+        user=user_name,
+        user_type="string",
     )
 
-    osu.players.update_players_recent(
-        players=common.players,
+    if not user:
+        return None
+
+    return user.user_id
+
+
+async def get_recent_scores(user_id: int) -> Optional[list[Score]]:
+    try:
+        scores = common.osu_api.v2.user_scores(
+            user_id=user_id,
+            type_=ScoreType.RECENT,
+            include_fails=True,
+        )
+    except requests.exceptions.JSONDecodeError:
+        return None
+
+    if not scores:
+        return None
+
+    return scores
+
+
+async def get_player_with_updated_recent_scores(user_name: str) -> Optional[Player]:
+    # check database first
+    user_id = common.database.get(user_name)
+
+    if user_id is None:
+        user_id = await get_player_user_id(user_name)
+        if user_id is None:
+            print("Could not retrieve user's id.")
+            return None
+
+    common.database.set(user_name, user_id)
+
+    assert isinstance(user_id, int)
+
+    recent_scores = await get_recent_scores(user_id)
+
+    if recent_scores is None:
+        print(f"no recent scores found for {user_name}")
+    else:
+        print(f"recent scores found for {user_name}")
+
+    return Player(
+        user_name=user_name,
+        id=user_id,
+        most_recent_scores=recent_scores,
     )
 
 
-def main() -> int:
-    print("initializing players...")
+async def get_players_with_updated_recent_scores(
+    user_names: list[str],
+) -> list[Player]:
+    tasks = [
+        get_player_with_updated_recent_scores(user_name) for user_name in user_names
+    ]
+    players: list[Optional[Player]] = await asyncio.gather(*tasks)
+
+    real_players = [player for player in players if player]
+
+    return real_players
+
+
+async def download_set_from_set_id(set_id: int, beatmap_title: str) -> Optional[Path]:
+    response = await common.http.SESSION.get( 
+        f"https://api.chimu.moe/v1/download/{set_id}",
+        headers={
+            "Accept": "application/octet-stream",
+        },
+    )
+
+    if response.status not in range(200, 300):
+        print(f"Couldn't download {set_id}.osz / {beatmap_title}")
+        return None
+
+    new_beatmap = common.beatmaps.NEW_MAPS_FOLDER / f"{set_id}.osz"
+
+    new_beatmap.write_bytes(await response.content.read())
+
+    common.beatmaps.downloaded.append(set_id)
+
+    return new_beatmap
+
+
+async def download_set_from_player_recent(player: Player) -> Optional[list[Path]]:
+    tasks = []
+
+    if not player.most_recent_scores:
+        print(f"{player.user_name} doesn't have any recent scores")
+        return None
+
+    for score in player.most_recent_scores:
+        if not score.beatmapset:
+            print(f"can't get beatmap from {player.user_name}")
+            continue
+
+        set_id = score.beatmapset.id
+        title = score.beatmapset.title
+
+        if set_id in common.beatmaps.downloaded:
+            print("you already have", title)
+            continue
+
+        new_map = common.beatmaps.NEW_MAPS_FOLDER / f"{set_id}.osz"
+        if new_map.exists():
+            print("its already in the `beatmaps` folder:", title)
+            continue
+
+        print(f"downloading {set_id} from {player.user_name}")
+
+        tasks.append(download_set_from_set_id(set_id, title))
+
+    new_maps_path: list[Optional[Path]] = await asyncio.gather(*tasks)
+
+    valid_new_maps = [bmap for bmap in new_maps_path if bmap]
+
+    return valid_new_maps
+
+
+async def download_sets_from_players_recent(players: list[Player]) -> None:
+    tasks = [download_set_from_player_recent(player) for player in players]
+
+    map_paths: list[Optional[list[Path]]] = await asyncio.gather(*tasks)
+
+    downloaded_sets = [bmap for bmap in map_paths if bmap]
+
+    all_maps_downloaded = []
+    for set in downloaded_sets:
+        all_maps_downloaded.extend(set)
+
+    print(f"successfully downloaded {len(downloaded_sets)} sets from players!")
+    print(f"successfully downloaded {len(all_maps_downloaded)} maps from players!")
+
+    return None
+
+
+async def main() -> int:
+    init_downloaded_beatmaps()
     init_common()
-    print("finished initialization")
-    LEN_PLAYERS = len(common.players)
 
     iterations = 0
 
     while True:
-        for player in common.players:
-            if player.most_recent_scores is None:
-                print(f"{player.user_name} has no recent scores")
-                continue
+        players = await get_players_with_updated_recent_scores(
+            config.osu_users_to_spectate,
+        )
 
-            for score in player.most_recent_scores:
-                if not score.beatmapset:
-                    print(f"no beatmap set was found for", player.user_name)
-                    continue
+        assert players, "no players found to spectate"
 
-                beatmap_set = score.beatmapset
+        await download_sets_from_players_recent(players)
 
-                if beatmap_set.id in common.beatmaps.downloaded:
-                    print("you already have", beatmap_set.title)
-                    continue
-
-                new_map = common.beatmaps.NEW_MAPS_FOLDER / f"{beatmap_set.id}.osz"
-                if new_map.exists():
-                    print("its already in the `beatmaps` folder:", beatmap_set.title)
-                    continue
-
-                print(f"downloading {beatmap_set.id} from {player.user_name}")
-                beatmap = osu.download.beatmap_from_set_id(beatmap_set.id)
-
-                if beatmap is None:
-                    print(f"Can't download beatmap from", player.user_name)
-                    continue
-
-                common.beatmaps.downloaded.append(beatmap_set.id)
-
-                print(
-                    f"Successfully downloaded beatmap ({beatmap.name} / {beatmap_set.title}) from {player.user_name}"
-                )
-
-                time.sleep(2)
+        len_players = len(players)
+        for idx in range(len_players * 2):
+            print(f"rate limit waiting {idx+1}/{len_players * 2} seconds")
+            await asyncio.sleep(1)
 
         iterations += 1
-
-        print(f"finished iterating for the {iterations} time!")
-
-        for idx in range(LEN_PLAYERS * 2):
-            print(f"rate limit waiting {idx+1}/{LEN_PLAYERS * 2}")
-            time.sleep(1)
-
-        common.players = osu.players.update_players_recent(
-            players=common.players,
-        )
+        print(f"passed through {iterations} iterations!")
 
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(asyncio.run(main()))

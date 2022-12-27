@@ -1,3 +1,3 @@
-import requests
+import aiohttp
 
-session = requests.Session()
+SESSION: aiohttp.ClientSession
