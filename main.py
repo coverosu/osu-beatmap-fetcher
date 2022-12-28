@@ -100,29 +100,47 @@ async def get_players_with_updated_recent_scores(
     return real_players
 
 
+tasks_that_have_been_passed = 0
+
+
 async def download_set_from_set_id(set_id: int, beatmap_title: str) -> Optional[Path]:
-    try:
-        response = await common.http.SESSION.get(
-            f"https://api.chimu.moe/v1/download/{set_id}",
-            headers={
-                "Accept": "application/octet-stream",
-            },
-        )
-    except aiohttp.ClientConnectionError as e:
-        print("error when downloading map:", e)
-        return None
+    global tasks_that_have_been_passed
+    if tasks_that_have_been_passed > 3:
+        async with common.locks.BEATMAP:
+            await asyncio.sleep(5)
+            tasks_that_have_been_passed = 0
 
-    if response.status not in range(200, 300):
-        print(f"Couldn't download {set_id}.osz / {beatmap_title}")
-        return None
+    async with common.locks.BEATMAP_SEMAPHORE:
+        try:
+            response = await common.http.SESSION.get(
+                f"https://api.chimu.moe/v1/download/{set_id}",
+                headers={
+                    "Accept": "application/octet-stream",
+                },
+            )
+        except aiohttp.ClientConnectionError as e:
+            print("error when downloading map:", e)
+            return None
 
-    new_beatmap = common.beatmaps.NEW_MAPS_FOLDER / f"{set_id}.osz"
+        tasks_that_have_been_passed += 1
 
-    new_beatmap.write_bytes(await response.content.read())
+        if response.status not in range(200, 300):
+            print(
+                f"Couldn't download {set_id}.osz / {beatmap_title} (response.status = {response.status})"
+            )
+            return None
 
-    common.beatmaps.downloaded.append(set_id)
+        async with common.locks.BEATMAP:
+            new_beatmap = common.beatmaps.NEW_MAPS_FOLDER / f"{set_id}.osz"
 
-    return new_beatmap
+            with new_beatmap.open("wb+") as f:
+                f.write(await response.content.read())
+
+            common.beatmaps.downloaded.append(set_id)
+
+        print(f'Successfully Downloaded {beatmap_title} ({set_id}.osz)')
+
+        return new_beatmap
 
 
 async def download_set_from_player_recent(player: Player) -> Optional[list[Path]]:
