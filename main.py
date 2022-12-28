@@ -7,6 +7,7 @@ import aiohttp
 import requests
 from ossapi import Score
 from ossapi.enums import ScoreType
+
 import common
 import config
 from objects.player import Player
