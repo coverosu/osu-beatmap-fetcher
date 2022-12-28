@@ -35,10 +35,14 @@ class JsonDatabase:
 
     def load(self) -> None:
         if self.location.exists():
-            self.database = json.loads(self.location.read_text())
+            self.database = json.loads(self.location.read_text() or "{}")
         else:
             self.location.write_text(self.database_dump)
 
+        return None
+
+    def update_database_file(self) -> None:
+        self.write_to_file()
         return None
 
     def write_to_file(self) -> None:

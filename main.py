@@ -7,7 +7,6 @@ import aiohttp
 import requests
 from ossapi import Score
 from ossapi.enums import ScoreType
-
 import common
 import config
 from objects.player import Player
@@ -177,28 +176,39 @@ async def download_sets_from_players_recent(players: list[Player]) -> None:
     return None
 
 
+async def clean_up() -> None:
+    print("Cleaning program for shutdown...")
+    common.database.update_database_file()
+    await common.http.SESSION.close()
+    print("finished shutting down.")
+
+
 async def main() -> int:
+
     init_downloaded_beatmaps()
     init_common()
 
     iterations = 0
 
-    while True:
-        players = await get_players_with_updated_recent_scores(
-            config.osu_users_to_spectate,
-        )
+    try:
+        while True:
+            players = await get_players_with_updated_recent_scores(
+                config.osu_users_to_spectate,
+            )
 
-        assert players, "no players found to spectate"
+            assert players, "no players found to spectate"
 
-        await download_sets_from_players_recent(players)
+            await download_sets_from_players_recent(players)
 
-        len_players = len(players)
-        for idx in range(len_players * 2):
-            print(f"rate limit waiting {idx+1}/{len_players * 2} seconds")
-            await asyncio.sleep(1)
+            len_players = len(players)
+            for idx in range(len_players * 2):
+                print(f"rate limit waiting {idx+1}/{len_players * 2} seconds")
+                await asyncio.sleep(1)
 
-        iterations += 1
-        print(f"passed through {iterations} iterations!")
+            iterations += 1
+            print(f"passed through {iterations} iterations!")
+    except KeyboardInterrupt:
+        await clean_up()
 
     return 0
 
