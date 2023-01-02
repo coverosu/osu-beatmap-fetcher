@@ -20,10 +20,11 @@ def init_downloaded_beatmaps() -> None:
 
         try:
             beatmap_set_id, *etc = beatmap.name.split(" ")
+            beatmap_set_id = int(beatmap_set_id)
         except:
             continue
 
-        common.beatmaps.downloaded.append(int(beatmap_set_id))
+        common.beatmaps.downloaded.append(beatmap_set_id)
 
 
 def init_common() -> None:
@@ -138,7 +139,7 @@ async def download_set_from_set_id(set_id: int, beatmap_title: str) -> Optional[
 
             common.beatmaps.downloaded.append(set_id)
 
-        print(f'Successfully Downloaded {beatmap_title} ({set_id}.osz)')
+        print(f"Successfully Downloaded {beatmap_title} ({set_id}.osz)")
 
         return new_beatmap
 
